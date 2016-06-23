@@ -8,7 +8,6 @@ fi
 STORAGEACCOUNTNAME=$1
 if [[ $1 == *blob.core.windows.net* ]]; then
     echo "Extracting storage account name from $1"
-    echo $1 | cut -d'.' -f 1
     STORAGEACCOUNTNAME=$(echo $1 | cut -d'.' -f 1)
 fi
 echo STORAGE ACCOUNT IS: $STORAGEACCOUNTNAME
@@ -22,7 +21,7 @@ STORAGEACCOUNTKEY=$2
 
 echo "Validate storage account creds:"
 CREDS_VALIDATION=$(echo -e "from azure.storage.blob import BlobService\nvalid=True\ntry:\n\tblob_service = BlobService(account_name='$STORAGEACCOUNTNAME', account_key='$STORAGEACCOUNTKEY')\n\tblob_service.get_blob_service_properties()\nexcept Exception as e:\n\tvalid=False\nprint valid"| sudo python)
-if [[ $CREDS_VALIDATION == "False"]]; then
+if [[ $CREDS_VALIDATION == "False" ]]; then
     echo "Invalid Credentials provided for storage account"
     exit 2
 else
