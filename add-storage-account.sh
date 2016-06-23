@@ -1,11 +1,17 @@
 #! /bin/bash
-
 if [ -z "$1" ]
     then
         echo "Storage account name must be provided."
         exit 1
 fi
+
 STORAGEACCOUNTNAME=$1
+if [[ $1 == *blob.core.windows.net* ]]; then
+    echo "Extracting storage account name from $1"
+    echo $1 | cut -d'.' -f 1
+    STORAGEACCOUNTNAME=$(echo $1 | cut -d'.' -f 1)
+fi
+echo STORAGE ACCOUNT IS: $STORAGEACCOUNTNAME
 
 if [ -z "$2" ]
     then    
@@ -14,7 +20,15 @@ if [ -z "$2" ]
 fi
 STORAGEACCOUNTKEY=$2
 
-CORESITEPATH=/etc/hadoop/conf/core-site.xml
+echo "Validate storage account creds:"
+CREDS_VALIDATION=$(echo -e "from azure.storage.blob import BlobService\nvalid=True\ntry:\n\tblob_service = BlobService(account_name='$STORAGEACCOUNTNAME', account_key='$STORAGEACCOUNTKEY')\n\tblob_service.get_blob_service_properties()\nexcept Exception as e:\n\tvalid=False\nprint valid"| sudo python)
+if [[ $CREDS_VALIDATION == "False"]]; then
+    echo "Invalid Credentials provided for storage account"
+    exit 2
+else
+    echo "Successfully validated storage account credentials."
+fi
+
 AMBARICONFIGS_SH=/var/lib/ambari-server/resources/scripts/configs.sh
 PORT=8080
 
@@ -71,7 +85,6 @@ updateAmbariConfigs() {
         exit 135
     fi
     echo "Added property: 'fs.azure.account.keyprovider.$STORAGEACCOUNTNAME.blob.core.windows.net':org.apache.hadoop.fs.azure.SimpleKeyProvider "
-
 }
 
 stopServiceViaRest() {
@@ -112,8 +125,6 @@ USERID=$(echo -e "import hdinsight_common.Constants as Constants\nprint Constant
 echo "USERID=$USERID"
 
 PASSWD=$(echo -e "import hdinsight_common.ClusterManifestParser as ClusterManifestParser\nimport hdinsight_common.Constants as Constants\nimport base64\nbase64pwd = ClusterManifestParser.parse_local_manifest().ambari_users.usersmap[Constants.AMBARI_WATCHDOG_USERNAME].password\nprint base64.b64decode(base64pwd)" | python)
-
-echo JAVA_HOME=$JAVA_HOME
 
 checkHostNameAndSetClusterName
 validateUsernameAndPassword
