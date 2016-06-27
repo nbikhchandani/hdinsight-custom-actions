@@ -1,8 +1,18 @@
 #! /bin/bash
+
+#validate user input
 if [ -z "$1" ]
     then
+        usage
         echo "Storage account name must be provided."
-        exit 1
+        exit 137
+fi
+
+if [ -z "$2" ]
+    then
+        usage
+        echo "Storage account key must be provided."
+        exit 138
 fi
 
 STORAGEACCOUNTNAME=$1
@@ -12,22 +22,47 @@ if [[ $1 == *blob.core.windows.net* ]]; then
 fi
 echo STORAGE ACCOUNT IS: $STORAGEACCOUNTNAME
 
-if [ -z "$2" ]
-    then    
-        echo "Storage account key must be provided."
-        exit 1
-fi
 STORAGEACCOUNTKEY=$2
 
+#validate storage account credentials
 echo "Validate storage account creds:"
 CREDS_VALIDATION=$(echo -e "from azure.storage.blob import BlobService\nvalid=True\ntry:\n\tblob_service = BlobService(account_name='$STORAGEACCOUNTNAME', account_key='$STORAGEACCOUNTKEY')\n\tblob_service.get_blob_service_properties()\nexcept Exception as e:\n\tvalid=False\nprint valid"| sudo python)
 if [[ $CREDS_VALIDATION == "False" ]]; then
     echo "Invalid Credentials provided for storage account"
-    exit 2
+    exit 141
 else
     echo "Successfully validated storage account credentials."
 fi
 
+#Encrypt storage account key
+CERT=$(sudo grep -R --include="*.crt" "HDInsight.Production.Encryption.Cert" /var/lib/waagent/ | cut -d ":" -f 1)
+echo $2 | sudo openssl cms -encrypt -outform PEM -out storagekey.txt $CERT
+if (( $? )); then
+    echo "Could not encrypt storage account key"
+    exit 139
+fi
+STORAGEACCOUNTKEY=$(echo -e "import re\n\nfile = open('storagekey.txt', 'r')\nfor line in file.read().splitlines():\n\tif '-----BEGIN CMS-----' in line or '-----END CMS-----' in line:\n\t\tcontinue\n\telse:\n\t\tprint line\nfile.close()" | sudo python)
+STORAGEACCOUNTKEY=$(echo $STORAGEACCOUNTKEY | tr -d ' ')
+echo "STORAGEACCOUNTKEY=$STORAGEACCOUNTKEY"
+if [ -z "$STORAGEACCOUNTKEY" ];
+    then
+        echo "Storage account key could not be stripped off header values form encrypted key"
+        exit 140
+fi
+sudo rm storagekey.txt
+
+#Validate storage account region
+#1. get default SA account name
+CORESITECONTENT=$(sudo bash $AMBARICONFIGS_SH -u $USERID -p $PASSWD get $ACTIVEAMBARIHOST  $CLUSTERNAME core-site )
+echo $CORESITECONTENT > coresiteread.txt
+DEFAULTSANAME=$(echo -e "import re\nfile = open('coresiteread.txt','r').read()\nfor line in file.splitlines():\n\tif 'fs.defaultFS' in line:\n\t\tm = re.search('wasb://(.+?).blob.core.windows.net', line).group(1)\n\t\tif m:\n\t\t\tprint m"| sudo python)
+DEFAULTSANAME=$(echo $DEFAULTSANAME | cut -d '@' -f 2)
+#2. get default SA account key
+#2. decrypt default SA key
+#3. determine region from decrypted SA key
+#4. determine region for user's input SA key
+#5. if default region == user SA region ? continue : exit
+sudo rm -f coresiteread.txt
 AMBARICONFIGS_SH=/var/lib/ambari-server/resources/scripts/configs.sh
 PORT=8080
 
@@ -60,6 +95,7 @@ checkHostNameAndSetClusterName() {
 
 validateUsernameAndPassword() {
     coreSiteContent=$(bash $AMBARICONFIGS_SH -u $USERID -p $PASSWD get $ACTIVEAMBARIHOST $CLUSTERNAME core-site)
+    echo $coreSiteContent
     if [[ $coreSiteContent == *"[ERROR]"* && $coreSiteContent == *"Bad credentials"* ]]; then
         echo "[ERROR] Username and password are invalid. Exiting!"
         exit 134
