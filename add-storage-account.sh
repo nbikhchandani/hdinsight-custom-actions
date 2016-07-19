@@ -57,17 +57,7 @@ if [ -z "$STORAGEACCOUNTKEY" ];
 fi
 sudo rm storagekey.txt
 
-
-#Validate storage account region
-#1. get default SA account name
-#DEFAULTSANAME=$(echo -e "import re\nfile = open('coresiteread.txt','r').read()\nfor line in file.splitlines():\n\tif 'fs.defaultFS' in line:\n\t\tm = re.search('wasb://(.+?).blob.core.windows.net', line).group(1)\n\t\tif #m:\n\t\t\tprint m"| sudo python)
-#DEFAULTSANAME=$(echo $DEFAULTSANAME | cut -d '@' -f 2)
-#2. get default SA account key
-#2. decrypt default SA key
-#3. determine region from decrypted SA key ans SA name using blob storage client or cluster manifest
-#4. determine region for user's input SA key
-#5. if default region == user SA region ? continue : exit
-
+#Validate Storage Region
 
 AMBARICONFIGS_SH=/var/lib/ambari-server/resources/scripts/configs.sh
 PORT=8080
