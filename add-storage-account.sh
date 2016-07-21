@@ -57,8 +57,6 @@ if [ -z "$STORAGEACCOUNTKEY" ];
 fi
 sudo rm storagekey.txt
 
-#Validate Storage Region
-
 AMBARICONFIGS_SH=/var/lib/ambari-server/resources/scripts/configs.sh
 PORT=8080
 
