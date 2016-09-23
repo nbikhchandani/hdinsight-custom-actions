@@ -1,6 +1,6 @@
 #! /bin/bash
 
-filename=$1
+filename=testapp
 currenthostname=$(hostname)
 
 if [[ $currenthostname == hn* ]]; then
